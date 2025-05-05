@@ -7,40 +7,114 @@ import (
 	"log"
 	"net/http"
 	"os"
-
+	"strings"
+	"bufio"
+	"strconv"
 	"time"
-
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var db *sql.DB
-var isMaster bool = false
-var masterAddress string = "http://localhost:8001"
-var electionInProgress bool = false
+var (
+    db           *sql.DB
+    masterAddress   string
+    isMaster     bool
+    electionInProgress bool
+)
 
+// Create any MySQL user you choose, set a password and give them permissions:
+/*
+	CREATE USER 'user'@'%' IDENTIFIED BY 'rootroot';
+	GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' WITH GRANT OPTION;
+	FLUSH PRIVILEGES;
+
+*/
 func main() {
-	var err error
-	db, err = sql.Open("mysql", "root:123456@tcp(127.0.0.1:3307)/")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
+    reader := bufio.NewReader(os.Stdin)
 
-	err = db.Ping()
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
+    // 1. Prompt for MySQL username
+    fmt.Print("MySQL username (default \"root\"): ")
+    userInput, _ := reader.ReadString('\n')
+    user := strings.TrimSpace(userInput)
+    if user == "" {
+        user = "root"
+    }
 
-	os.Setenv("PORT", "8002")
+    // 2. Prompt for MySQL password
+    fmt.Print("MySQL password (default \"rootroot\"): ")
+    passInput, _ := reader.ReadString('\n')
+    pass := strings.TrimSpace(passInput)
+    if pass == "" {
+        pass = "rootroot"
+    }
 
-	// Define basic routes
-	defineBasicRoutes()
+    // 3. Prompt for MySQL host
+    fmt.Print("MySQL host (default \"127.0.0.1\"): ")
+    hostInput, _ := reader.ReadString('\n')
+    host := strings.TrimSpace(hostInput)
+    if host == "" {
+        host = "127.0.0.1"
+    }
 
-	go checkMasterHealth()
-	fmt.Println("Slave server running on port 8002...")
-	log.Fatal(http.ListenAndServe(":8002", nil))
+    // 4. Prompt for MySQL port
+    fmt.Print("MySQL port (default \"3306\"): ")
+    mysqlPortInput, _ := reader.ReadString('\n')
+    mysqlPortInput = strings.TrimSpace(mysqlPortInput)
+    mysqlPort := 3306
+    if mysqlPortInput != "" {
+        p, err := strconv.Atoi(mysqlPortInput)
+        if err != nil {
+            log.Fatalf("Invalid MySQL port: %v", err)
+        }
+        mysqlPort = p
+    }
+
+    // 5. Build the DSN from the four parts
+    dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, pass, host, mysqlPort)
+
+    // 6. Prompt for the HTTP server port
+    fmt.Print("HTTP server port (default \"8002\"): ")
+    httpPortInput, _ := reader.ReadString('\n')
+    httpPortInput = strings.TrimSpace(httpPortInput)
+    httpPort := 8002
+    if httpPortInput != "" {
+        p, err := strconv.Atoi(httpPortInput)
+        if err != nil {
+            log.Fatalf("Invalid HTTP port: %v", err)
+        }
+        httpPort = p
+    }
+
+    // 7. Prompt for the master server address
+    fmt.Print("Master server address (e.g. http://localhost:8001): ")
+    masterInput, _ := reader.ReadString('\n')
+    masterAddress = strings.TrimSpace(masterInput)
+    if masterAddress == "" {
+        masterAddress = "http://localhost:8001"
+    }
+
+    // 8. Open the MySQL connection
+    var err error
+    db, err = sql.Open("mysql", dsn)
+    if err != nil {
+        log.Fatalf("Failed to open database connection: %v", err)
+    }
+    defer db.Close()
+
+    // 9. Verify the database connection is alive
+    if err = db.Ping(); err != nil {
+        log.Fatalf("Failed to ping database: %v", err)
+    }
+    fmt.Println("✔️ Database connection successful")
+
+    // 10. Define all HTTP routes and start monitoring the master
+    defineBasicRoutes()
+    go checkMasterHealth()
+
+    // 11. Start the HTTP server
+    addr := fmt.Sprintf(":%d", httpPort)
+    fmt.Printf("🚀 Slave server listening on %s (master = %s)\n", addr, masterAddress)
+    log.Fatal(http.ListenAndServe(addr, nil))
 }
-
 func defineBasicRoutes() {
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		allowCORS(w)

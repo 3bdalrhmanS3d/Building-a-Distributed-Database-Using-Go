@@ -13,6 +13,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+
 func allowCORS(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -27,7 +28,7 @@ var electionInProgress bool = false
 
 func main() {
 	var err error
-	db, err = sql.Open("mysql", "root:123456@tcp(127.0.0.1:3307)/")
+	db, err = sql.Open("mysql", "root:rootroot@tcp(127.0.0.1:3306)/")
 	if err != nil {
 		log.Fatal(err)
 	}

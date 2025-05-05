@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	 //"github.com/spf13/cobra"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -19,7 +20,7 @@ var electionInProgress bool = false
 
 func main() {
 	var err error
-	db, err = sql.Open("mysql", "root:123456@tcp(127.0.0.1:3307)/")
+	db, err = sql.Open("mysql", "root:rootroot@tcp(192.168.43.39:3306)/")
 	if err != nil {
 		log.Fatal(err)
 	}
